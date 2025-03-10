@@ -1,0 +1,105 @@
+function onOpen() {
+  var ui = SpreadsheetApp.getUi(); 
+  ui.createMenu("CORREOS") 
+    .addItem("ENVIAR CORREOS", "solicitarRangoCorreos") 
+    .addToUi(); 
+
+  
+}
+
+function solicitarRangoCorreos() {
+  var ui = SpreadsheetApp.getUi();
+  var respuesta = ui.prompt("Enviar Correos", "Ingresa el rango de filas a enviar (ejemplo: 2-10):", ui.ButtonSet.OK_CANCEL);
+
+  if (respuesta.getSelectedButton() == ui.Button.OK) {
+    var rango = respuesta.getResponseText().split("-");
+    if (rango.length === 2) {
+      var inicio = parseInt(rango[0], 10);  //el 10, es para que el texto sea tomado como un numero.
+      var fin = parseInt(rango[1], 10);
+
+      if (!isNaN(inicio) && !isNaN(fin) && inicio > 1 && fin >= inicio) {
+        enviarCorreosMasivos(inicio, fin);
+      } else {
+        ui.alert("Por favor, ingresa un rango válido.");
+      }
+    }
+  }
+}
+
+function enviarCorreosMasivos(inicio, fin) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var hoja = ss.getSheetByName(" Copia de Respuestas de formulario 1"); 
+  
+  var datos = hoja.getRange(inicio, 1, (fin - inicio + 1), hoja.getLastColumn()).getValues(); 
+  var errores = []; // Guarda las filas con errores
+
+  datos.forEach((fila, index) => {
+    try {
+      var nombre = fila[10];  // K - Nombre del empleado
+      var apellido = fila[11]; // L - Apellido del empleado
+      var tipoDocumento = fila[7]; // H - Tipo de documento
+      var numeroDocumento = fila[8]; // I - Número de documento
+      var estadoProceso = fila[26]; // AA - Estado del proceso
+      var detalle = fila[29]; // AD - Detalle
+      var autorizadoPor = fila[18]; // S - Nombre de quien autoriza
+      var correoEmpleado = fila[15]; // P - Correo electrónico del empleado
+
+      if (!correoEmpleado || !nombre || !apellido || !tipoDocumento || !numeroDocumento || !estadoProceso || !autorizadoPor) {
+        throw new Error("Datos incompletos");
+      }
+
+      var asunto = "¡Hemos atendido tu solicitud de Asociación de Empleados!";
+
+      var cuerpoHTML = `<!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+          .container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; border-left: 5px solid #00723f; }
+          .header { text-align: center; }
+          .header img { width: 150px; }
+          .content { color: #333; font-size: 16px; }
+          .footer { text-align: center; font-size: 12px; color: #666; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+          <img src="https://www.businesscol.com/wp-content/uploads/2023/02/seguros-bolivar-logo.png" alt="Seguros Bolívar">
+          </div>
+          <div class="content">
+            <p>Hola <strong>${autorizadoPor}</strong>,</p>
+            <p>Se confirma que hemos procesado la solicitud de asociación y/o actualización del empleado <strong>${nombre} ${apellido}</strong>, identificado con la <strong>${tipoDocumento} ${numeroDocumento}</strong>, la cual se encuentra en estado <strong>${estadoProceso}</strong>.</p>
+            <p><strong>Comentarios Adicionales:</strong><br> ${detalle || "Sin comentarios"}</p>
+            <p>Nuestro compromiso es hacer este proceso más ágil, seguro y transparente para ti.</p>
+            <p><strong>Importante: Este mensaje es solo informativo, por favor no responder.</strong></p>
+            <div class="footer">
+            <p> Si necesitas más información, estamos para ayudarte. Puedes comunicarte con la <strong>MESA DE SERVICIO</strong>.</p>
+            <p> <strong>Línea de Voz:</strong> #773, Opción 5</p>
+            <p><strong>WhatsApp:</strong> 312 583 9577, Opción 2</p>
+            </div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>`;
+
+      // Enviar el correo
+      GmailApp.sendEmail(correoEmpleado, asunto, "", { htmlBody: cuerpoHTML });
+      Logger.log("Correo enviado a: " + correoEmpleado);
+    
+    } catch (error) {
+      Logger.log("Error en la fila " + (inicio + index) + ": " + error.message);
+      errores.push("Fila " + (inicio + index) + ": " + error.message);
+    }
+  });
+
+  // Mostrar errores en la interfaz si hay alguno
+  if (errores.length > 0) {
+    var ui = SpreadsheetApp.getUi();
+    ui.alert("Errores encontrados en las siguientes filas:\n\n" + errores.join("\n"));
+  } else {
+    Logger.log("Todos los correos fueron enviados exitosamente.");
+  }
+}
+
